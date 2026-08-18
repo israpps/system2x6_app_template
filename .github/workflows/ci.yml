@@ -1,0 +1,46 @@
+name: CI
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/ps2homebrew/ps2homebrew:main
+    steps:
+
+      - uses: actions/checkout@v4
+      - run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --prune --unshallow
+
+      - name: Compile generic
+        run: |
+          make clean all PROGVER=${{ steps.tag_version.outputs.new_tag }}
+
+      - name: Upload artifacts
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}_R${{github.run_number}
+          path: |
+            bin/*
+
+      - name: Increment our tag
+        if: github.ref == 'refs/heads/main'
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: master
+          custom_release_rules: "release:major:New release!"
+
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag_version.outputs.new_tag
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            bin/*
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
